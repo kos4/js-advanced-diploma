@@ -1,0 +1,16 @@
+environment:
+  nodejs_version: "18"
+
+branches:
+  only:
+    - master  # ветка git
+
+cache: node_modules  # кеширование
+
+install:
+  - npm install  # команда установки зависимостей
+
+build: off  # отключаем встроенную в appveyor систему сборки
+
+test_script:
+  - npm run lint && npm test  # скрипт тестирования

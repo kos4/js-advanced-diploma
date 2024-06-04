@@ -2,7 +2,7 @@
  * @todo
  * @param index - индекс поля
  * @param boardSize - размер квадратного поля (в длину или ширину)
- * @returns строка - тип ячейки на поле:
+ * @returns string - тип ячейки на поле:
  *
  * top-left
  * top-right
@@ -23,8 +23,30 @@
  * ```
  * */
 export function calcTileType(index, boardSize) {
-  // TODO: ваш код будет тут
-  return 'center';
+  let result = 'center';
+  const sq = boardSize * boardSize;
+
+  if (index >= 0 && index < boardSize) {
+    result = 'top';
+  } else if (index >= sq - boardSize && index < sq) {
+    result = 'bottom';
+  }
+
+  if (index % boardSize === 0) {
+    if (result !== 'center') {
+      result += '-left';
+    } else {
+      result = 'left';
+    }
+  } else if ((index + 1) % boardSize === 0) {
+    if (result !== 'center') {
+      result += '-right';
+    } else {
+      result = 'right';
+    }
+  }
+
+  return result;
 }
 
 export function calcHealthLevel(health) {
@@ -37,4 +59,8 @@ export function calcHealthLevel(health) {
   }
 
   return 'high';
+}
+
+export function getInfoCharacter(character) {
+  return `🎖${character.level} ⚔${character.attack} 🛡${character.defence} ❤${character.health}`;
 }

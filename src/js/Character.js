@@ -19,6 +19,9 @@ export default class Character {
     this.defence = 0;
     this.health = 50;
     this.type = type;
-    // TODO: выбросите исключение, если кто-то использует "new Character()"
+
+    if (new.target.name === 'Character' || new.target.name === 's') {
+      throw new Error('This is a base character class, to create a character use the appropriate class.');
+    }
   }
 }
