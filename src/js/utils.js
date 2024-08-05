@@ -64,3 +64,60 @@ export function calcHealthLevel(health) {
 export function getInfoCharacter(character) {
   return `🎖${character.level} ⚔${character.attack} 🛡${character.defence} ❤${character.health}`;
 }
+
+export function checkPositionMoving(idCursor, idActive, limit, size = 8) {
+  let result;
+  let diff = Math.abs(idCursor - idActive);
+  const mod = idCursor % size;
+
+  const diagDiffKoef = Math.abs(
+    Math.floor(idCursor / size) - Math.floor(idActive / size)
+  )
+
+  // vertical
+  if (mod - (idActive % size) === 0 && diff / size <= limit) {
+    result = diff / size;
+  }
+
+  // horisontal
+  if (Math.floor(idCursor / size) === Math.floor(idActive / size) && diff <= limit) {
+    result = diff;
+  }
+
+  //left diagonal
+  if (diff === (size - 1) * diagDiffKoef && diff / (size - 1) <= limit) {
+    result = diff / (size - 1)
+  }
+
+  //right diagonal
+  if (diff === (size + 1) * diagDiffKoef && diff / (size + 1) <= limit) {
+    result = diff / (size + 1)
+  }
+
+  return result;
+}
+
+export function getRadiusAttack(cur_pos, dist) {
+  const size = 8;
+  const list = [];
+
+  const pos_x = (cur_pos - 1) % size + 1;
+  const pos_y = Math.floor((cur_pos - 1)/size);
+
+  const start_x = (pos_x - dist >= 0) ? pos_x - dist : 0;
+  const start_y = (pos_y - dist >= 0) ? pos_y - dist : 0;
+  const end_x = (pos_x + dist < size) ? pos_x + dist : size - 1;
+  const end_y = (pos_y + dist < size) ? pos_y + dist : size - 1;
+
+  for (let y = start_y; y <= end_y; y++) {
+    for (let x = start_x; x <= end_x; x++) {
+      let res = y * size + x;
+      if (res !== cur_pos) {
+        list.push(res);
+      }
+
+    }
+  }
+
+  return list;
+}

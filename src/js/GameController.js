@@ -7,7 +7,7 @@ import PositionedCharacter from "./PositionedCharacter";
 import Vampire from "./characters/Vampire";
 import Undead from "./characters/Undead";
 import Daemon from "./characters/Daemon";
-import {getInfoCharacter} from "./utils";
+import {getInfoCharacter, checkPositionMoving, getRadiusAttack} from "./utils";
 import GamePlay from "./GamePlay";
 import cursors from "./cursors";
 
@@ -36,7 +36,7 @@ export default class GameController {
   onCellClick(index) {
     // TODO: react to click
 
-    if (this.checkPositionPlayer(index, true)) {
+    if (this.checkPositionPlayer(index)) {
       this.playerTeam.characters.forEach(item => {
         this.gamePlay.deselectCell(item.position);
       });
@@ -53,16 +53,22 @@ export default class GameController {
       const character = this.getCharacterByPosition(index);
       this.gamePlay.showCellTooltip(getInfoCharacter(character), index);
 
-      if (this.isCharacterPlayer(character)) {
-        cursor = 'pointer';
+      if (this.selectChar) {
+        if (this.checkAttack(index)) {
+          this.gamePlay.selectCell(index, 'red');
+          this.gamePlay.setCursor(cursors.crosshair);
+        }
       } else {
-        cursor = 'notallowed';
+        if (this.isCharacterPlayer(character)) {
+          cursor = 'pointer';
+        } else {
+          cursor = 'notallowed';
+        }
+        this.gamePlay.setCursor(cursors[cursor]);
       }
-
-      this.gamePlay.setCursor(cursors[cursor]);
     } else {
       if (this.selectChar) {
-        if (this.selectChar.positionsMoving.includes(index)) {
+        if (checkPositionMoving(index, this.selectChar.position, this.selectChar.distance, this.gamePlay.boardSize)) {
           this.gamePlay.selectCell(index, 'green');
           this.gamePlay.setCursor(cursors.pointer);
         }
@@ -70,11 +76,22 @@ export default class GameController {
     }
   }
 
+  checkAttack(index) {
+    const positions = [];
+    this.mobsTeam.characters.forEach(item => positions.push(item.position));
+
+    return this.selectChar.radiusAttack.includes(index) && positions.includes(index);
+  }
+
   onCellLeave(index) {
     // TODO: react to mouse leave
     if (this.positions.includes(index)) {
       this.gamePlay.hideCellTooltip(index);
       this.gamePlay.setCursor(cursors.auto);
+
+      if (this.getCharacterByPosition(index).mob) {
+        this.gamePlay.deselectCell(index);
+      }
     } else {
       this.gamePlay.deselectCell(index);
       this.gamePlay.setCursor(cursors.auto);
@@ -91,7 +108,7 @@ export default class GameController {
     this.playerTeam.characters.forEach(character => {
       let position = getRandomInRange(0, positions.player.length - 1);
       character.position = positions.player[position];
-      character.positionsMoving = this.setPositionsMoving(character);
+      character.radiusAttack = getRadiusAttack(character.position, character.distanceAttack);
       this.positions.push(character.position);
       positionedCharacter.push(new PositionedCharacter(character, positions.player[position]));
       positions.player.splice(position, 1);
@@ -115,7 +132,7 @@ export default class GameController {
     }
   }
 
-  checkPositionPlayer(index, write = false) {
+  checkPositionPlayer(index) {
     if (this.positions.includes(index)) {
       const character = this.getCharacterByPosition(index);
       const result = this.isCharacterPlayer(character);
@@ -138,84 +155,5 @@ export default class GameController {
     }
 
     return false;
-  }
-
-  setPositionsMoving(charecter) {
-    const result = [];
-    const mixMaxPos = this.getMinMaxPosRow(charecter.position);
-    const max = this.gamePlay.boardSize * this.gamePlay.boardSize - 1;
-
-    //горизонталь вправо
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position + i;
-      if (pos <= mixMaxPos.max) {
-        result.push(pos);
-      }
-    }
-
-    //горизонталь влево
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position - i;
-      if (pos >= mixMaxPos.min) {
-        result.push(pos);
-      }
-    }
-
-    //вертикаль вниз
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position + i * this.gamePlay.boardSize;
-      if (pos <= max) {
-        result.push(pos);
-      }
-    }
-
-    //вертикаль вверх
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position - i * this.gamePlay.boardSize;
-      if (pos >= 0) {
-        result.push(pos);
-      }
-    }
-
-    //диагональ вправо вниз
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position + i + i * this.gamePlay.boardSize;
-      if (pos <= max && pos <= mixMaxPos.max + i * this.gamePlay.boardSize - 1) {
-        result.push(pos);
-      }
-    }
-
-    //диагональ влево вниз
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position - i + i * this.gamePlay.boardSize;
-      if (pos <= max && pos >= mixMaxPos.min + i * this.gamePlay.boardSize) {
-        result.push(pos);
-      }
-    }
-
-    //диагональ вправо вверх
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position + i - i * this.gamePlay.boardSize;
-      if (pos >= 0 && pos <= mixMaxPos.max - i * this.gamePlay.boardSize - 1) {
-        result.push(pos);
-      }
-    }
-
-    //диагональ влево вверх
-    for (let i = 1; i <= charecter.distance; i += 1) {
-      const pos = charecter.position - i - i * this.gamePlay.boardSize;
-      if (pos >= 0 && pos >= mixMaxPos.min - i * this.gamePlay.boardSize) {
-        result.push(pos);
-      }
-    }
-
-    return result;
-  }
-
-  getMinMaxPosRow(index) {
-    return {
-      min: Math.floor(index / this.gamePlay.boardSize) * this.gamePlay.boardSize,
-      max: (Math.floor(index / this.gamePlay.boardSize) + 1) * this.gamePlay.boardSize - 1,
-    }
   }
 }
