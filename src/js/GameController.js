@@ -2,7 +2,7 @@ import themes from "./themes";
 import Bowman from "./characters/Bowman";
 import Swordsman from "./characters/Swordsman";
 import Magician from "./characters/Magician";
-import {generateTeam, getPositions, getRandomInRange} from "./generators";
+import {generateTeam, getPositions, getPositionsChar, getRandomInRange} from "./generators";
 import PositionedCharacter from "./PositionedCharacter";
 import Vampire from "./characters/Vampire";
 import Undead from "./characters/Undead";
@@ -18,6 +18,7 @@ export default class GameController {
     this.positions = [];
     this.classesPlayer = [Bowman, Swordsman, Magician];
     this.selectChar = null;
+    this.move = 'player';
   }
 
   init() {
@@ -42,8 +43,29 @@ export default class GameController {
       });
       this.gamePlay.selectCell(index);
     } else {
-      GamePlay.showError('Вы выбираете не своего персонажа.');
+      if (this.selectChar && checkPositionMoving(index, this.selectChar.position, this.selectChar.distance, this.gamePlay.boardSize)) {
+        this.movingCharacter(index);
+      } else if (this.positions.includes(index)) {
+        GamePlay.showError('Вы выбираете не своего персонажа.');
+      }
     }
+  }
+
+  movingCharacter(index) {
+    const currentPosition = this.selectChar.position;
+    this.selectChar.position = index;
+    this.positions = this.positions.map(item => item === currentPosition ? index : item);
+    this.selectChar.radiusAttack = getRadiusAttack(index, this.selectChar.distanceAttack);
+    this.gamePlay.deselectCell(currentPosition);
+    this.gamePlay.deselectCell(index);
+
+    const positionedCharacter = [];
+
+    this.playerTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
+    this.mobsTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
+    this.gamePlay.redrawPositions(positionedCharacter);
+    this.selectChar = null;
+    this.move = 'mobs';
   }
 
   onCellEnter(index) {
