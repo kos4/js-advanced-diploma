@@ -37,18 +37,51 @@ export default class GameController {
   onCellClick(index) {
     // TODO: react to click
 
+    if (this.move === 'mobs') {
+      GamePlay.showError('Сейчас ход противника.');
+      return;
+    }
+
     if (this.checkPositionPlayer(index)) {
       this.playerTeam.characters.forEach(item => {
         this.gamePlay.deselectCell(item.position);
       });
       this.gamePlay.selectCell(index);
     } else {
-      if (this.selectChar && checkPositionMoving(index, this.selectChar.position, this.selectChar.distance, this.gamePlay.boardSize)) {
-        this.movingCharacter(index);
-      } else if (this.positions.includes(index)) {
+      if (this.selectChar) {
+        if (checkPositionMoving(index, this.selectChar.position, this.selectChar.distance, this.gamePlay.boardSize) && !this.positions.includes(index)) {
+          this.movingCharacter(index);
+        } else if (this.positions.includes(index)) {
+          this.attackCharacter(index);
+        }
+      } else {
         GamePlay.showError('Вы выбираете не своего персонажа.');
       }
     }
+  }
+
+  attackCharacter(index) {
+    const target = this.getCharacterByPosition(index)
+    const damage = Math.max(this.selectChar.attack - target.defence, this.selectChar.attack * 0.1);
+    target.health -= damage;
+    const showDamage = this.gamePlay.showDamage(index, damage);
+    showDamage.then(() => {
+      const positionedCharacter = this.getNewPositions();
+
+      this.gamePlay.redrawPositions(positionedCharacter);
+      this.gamePlay.deselectCell(this.selectChar.position);
+      this.selectChar = null;
+      this.move = 'mobs';
+    });
+  }
+
+  getNewPositions() {
+    const positionedCharacter = [];
+
+    this.playerTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
+    this.mobsTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
+
+    return positionedCharacter;
   }
 
   movingCharacter(index) {
@@ -59,10 +92,8 @@ export default class GameController {
     this.gamePlay.deselectCell(currentPosition);
     this.gamePlay.deselectCell(index);
 
-    const positionedCharacter = [];
+    const positionedCharacter = this.getNewPositions();
 
-    this.playerTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
-    this.mobsTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
     this.gamePlay.redrawPositions(positionedCharacter);
     this.selectChar = null;
     this.move = 'mobs';
@@ -122,27 +153,25 @@ export default class GameController {
 
   renderingTeamInit() {
     const positions = getPositions(this.gamePlay.boardSize);
-    this.renderingTeam(positions);
+    const posPlayer = this.renderingTeam(positions, 'player');
+    const posMobs = this.renderingTeam(positions, 'mobs');
+
+    this.gamePlay.redrawPositions([...posPlayer, ...posMobs]);
   }
 
-  renderingTeam(positions) {
+  renderingTeam(positions, type) {
     const positionedCharacter = [];
-    this.playerTeam.characters.forEach(character => {
-      let position = getRandomInRange(0, positions.player.length - 1);
-      character.position = positions.player[position];
+    const characters = type === 'mobs' ? this.mobsTeam.characters : this.playerTeam.characters;
+    characters.forEach(character => {
+      let position = getRandomInRange(0, positions[type].length - 1);
+      character.position = positions[type][position];
       character.radiusAttack = getRadiusAttack(character.position, character.distanceAttack);
       this.positions.push(character.position);
-      positionedCharacter.push(new PositionedCharacter(character, positions.player[position]));
+      positionedCharacter.push(new PositionedCharacter(character, positions[type][position]));
       positions.player.splice(position, 1);
     });
-    this.mobsTeam.characters.forEach(character => {
-      let position = getRandomInRange(0, positions.mobs.length - 1);
-      character.position = positions.mobs[position];
-      this.positions.push(character.position);
-      positionedCharacter.push(new PositionedCharacter(character, positions.mobs[position]));
-      positions.mobs.splice(position, 1);
-    });
-    this.gamePlay.redrawPositions(positionedCharacter);
+
+    return positionedCharacter;
   }
 
   getCharacterByPosition(position) {
