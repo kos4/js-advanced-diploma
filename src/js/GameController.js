@@ -54,6 +54,8 @@ export default class GameController {
         } else if (this.positions.includes(index)) {
           this.attackCharacter(index);
         }
+
+        this.ai();
       } else {
         GamePlay.showError('Вы выбираете не своего персонажа.');
       }
@@ -71,8 +73,8 @@ export default class GameController {
       this.gamePlay.redrawPositions(positionedCharacter);
       this.gamePlay.deselectCell(this.selectChar.position);
       this.selectChar = null;
-      this.move = 'mobs';
     });
+    this.move = 'mobs';
   }
 
   getNewPositions() {
@@ -89,6 +91,7 @@ export default class GameController {
     this.selectChar.position = index;
     this.positions = this.positions.map(item => item === currentPosition ? index : item);
     this.selectChar.radiusAttack = getRadiusAttack(index, this.selectChar.distanceAttack);
+    this.selectChar.position = index;
     this.gamePlay.deselectCell(currentPosition);
     this.gamePlay.deselectCell(index);
 
@@ -168,7 +171,7 @@ export default class GameController {
       character.radiusAttack = getRadiusAttack(character.position, character.distanceAttack);
       this.positions.push(character.position);
       positionedCharacter.push(new PositionedCharacter(character, positions[type][position]));
-      positions.player.splice(position, 1);
+      positions[type].splice(position, 1);
     });
 
     return positionedCharacter;
@@ -206,5 +209,174 @@ export default class GameController {
     }
 
     return false;
+  }
+
+  ai() {
+    if (this.move !== 'mobs') return;
+
+    //выбор моба и цели.
+    const select = this.aiSelect();
+
+    if (select.action === 'attack') {
+      this.attackAi(select);
+    } else {
+      this.movingAi(select);
+    }
+  }
+
+  aiSelect() {
+    // выбираем самого ближайшего
+    let selected = null;
+
+    this.mobsTeam.characters.forEach((mob, mobKey) => {
+      if (selected) return;
+
+      this.playerTeam.characters.forEach((player, playerKey) => {
+        if (mob.radiusAttack.includes(player.position)) {
+          selected = {
+            action: 'attack',
+            mob: this.mobsTeam.characters[mobKey],
+            player: this.playerTeam.characters[playerKey],
+          };
+          return false;
+        }
+      });
+    });
+
+    if (!selected) {
+      selected = {
+        action: 'move',
+        mob: 0,
+        player: 0,
+      };
+      this.mobsTeam.characters.forEach((mob, mobKey) => {
+        this.playerTeam.characters.forEach((player, playerKey) => {
+          if (Math.abs(mob.position - player.position) < Math.abs(this.mobsTeam.characters[selected.mob].position - this.playerTeam.characters[selected.player].position)) {
+            selected.mob = mobKey;
+            selected.player = playerKey;
+          }
+        });
+      });
+
+      selected.mob = this.mobsTeam.characters[selected.mob];
+      selected.player = this.playerTeam.characters[selected.player];
+    }
+
+    return selected;
+  }
+
+  attackAi(selectChar) {
+    const {mob, player} = selectChar;
+    const damage = Math.max(mob.attack - player.defence, mob.attack * 0.1);
+    player.health -= damage;
+
+    const showDamage = this.gamePlay.showDamage(player.position, damage);
+    showDamage.then(() => {
+      const positionedCharacter = this.getNewPositions();
+
+      this.gamePlay.redrawPositions(positionedCharacter);
+
+      this.move = 'player';
+    });
+  }
+
+  movingAi(selectChar) {
+    const {mob, player} = selectChar;
+    let newPosition = null;
+    mob.movingPositions = this.setAiPositionsMoving(mob);
+
+    mob.movingPositions.forEach(pos => {
+      if (newPosition === null || (Math.abs(pos - player.position) < Math.abs(newPosition - player.position) && !this.positions.includes(pos))) {
+        newPosition = pos;
+      }
+    });
+
+    this.positions = this.positions.map(item => item === mob.position ? newPosition : item);
+    mob.radiusAttack = getRadiusAttack(newPosition, mob.distanceAttack);
+    mob.position = newPosition;
+
+    const positionedCharacter = this.getNewPositions();
+
+    this.gamePlay.redrawPositions(positionedCharacter);
+    this.move = 'player';
+  }
+
+  setAiPositionsMoving(charecter) {
+    const result = [];
+    const mixMaxPos = this.getMinMaxPosRow(charecter.position);
+    const max = this.gamePlay.boardSize * this.gamePlay.boardSize - 1;
+
+    //горизонталь вправо
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position + i;
+      if (pos <= mixMaxPos.max) {
+        result.push(pos);
+      }
+    }
+
+    //горизонталь влево
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position - i;
+      if (pos >= mixMaxPos.min) {
+        result.push(pos);
+      }
+    }
+
+    //вертикаль вниз
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position + i * this.gamePlay.boardSize;
+      if (pos <= max) {
+        result.push(pos);
+      }
+    }
+
+    //вертикаль вверх
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position - i * this.gamePlay.boardSize;
+      if (pos >= 0) {
+        result.push(pos);
+      }
+    }
+
+    //диагональ вправо вниз
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position + i + i * this.gamePlay.boardSize;
+      if (pos <= max && pos <= mixMaxPos.max + i * this.gamePlay.boardSize - 1) {
+        result.push(pos);
+      }
+    }
+
+    //диагональ влево вниз
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position - i + i * this.gamePlay.boardSize;
+      if (pos <= max && pos >= mixMaxPos.min + i * this.gamePlay.boardSize) {
+        result.push(pos);
+      }
+    }
+
+    //диагональ вправо вверх
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position + i - i * this.gamePlay.boardSize;
+      if (pos >= 0 && pos <= mixMaxPos.max - i * this.gamePlay.boardSize - 1) {
+        result.push(pos);
+      }
+    }
+
+    //диагональ влево вверх
+    for (let i = 1; i <= charecter.distance; i += 1) {
+      const pos = charecter.position - i - i * this.gamePlay.boardSize;
+      if (pos >= 0 && pos >= mixMaxPos.min - i * this.gamePlay.boardSize) {
+        result.push(pos);
+      }
+    }
+
+    return result;
+  }
+
+  getMinMaxPosRow(index) {
+    return {
+      min: Math.floor(index / this.gamePlay.boardSize) * this.gamePlay.boardSize,
+      max: (Math.floor(index / this.gamePlay.boardSize) + 1) * this.gamePlay.boardSize - 1,
+    }
   }
 }
