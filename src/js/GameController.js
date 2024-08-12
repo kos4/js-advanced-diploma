@@ -51,11 +51,11 @@ export default class GameController {
       if (this.selectChar) {
         if (checkPositionMoving(index, this.selectChar.position, this.selectChar.distance, this.gamePlay.boardSize) && !this.positions.includes(index)) {
           this.movingCharacter(index);
+          this.ai();
         } else if (this.positions.includes(index)) {
           this.attackCharacter(index);
-        }
 
-        this.ai();
+        }
       } else {
         GamePlay.showError('Вы выбираете не своего персонажа.');
       }
@@ -68,18 +68,17 @@ export default class GameController {
     target.health -= damage;
     const showDamage = this.gamePlay.showDamage(index, damage);
     showDamage.then(() => {
-      const positionedCharacter = this.getNewPositions();
-
-      this.gamePlay.redrawPositions(positionedCharacter);
+      this.checkDeath(target, 'mobs');
       this.gamePlay.deselectCell(this.selectChar.position);
       this.selectChar = null;
+
+      this.move = 'mobs';
+      this.ai();
     });
-    this.move = 'mobs';
   }
 
   getNewPositions() {
     const positionedCharacter = [];
-
     this.playerTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
     this.mobsTeam.characters.forEach(item => positionedCharacter.push(new PositionedCharacter(item, item.position)));
 
@@ -107,7 +106,9 @@ export default class GameController {
     let cursor = 'auto';
     if (this.positions.includes(index)) {
       const character = this.getCharacterByPosition(index);
-      this.gamePlay.showCellTooltip(getInfoCharacter(character), index);
+      if (character) {
+        this.gamePlay.showCellTooltip(getInfoCharacter(character), index);
+      }
 
       if (this.selectChar) {
         if (this.checkAttack(index)) {
@@ -145,7 +146,7 @@ export default class GameController {
       this.gamePlay.hideCellTooltip(index);
       this.gamePlay.setCursor(cursors.auto);
 
-      if (this.getCharacterByPosition(index).mob) {
+      if (Object.hasOwn(this.getCharacterByPosition(index), 'mob')) {
         this.gamePlay.deselectCell(index);
       }
     } else {
@@ -154,12 +155,19 @@ export default class GameController {
     }
   }
 
-  renderingTeamInit() {
+  renderingTeamInit(mobs = false) {
     const positions = getPositions(this.gamePlay.boardSize);
-    const posPlayer = this.renderingTeam(positions, 'player');
     const posMobs = this.renderingTeam(positions, 'mobs');
+    let arr;
 
-    this.gamePlay.redrawPositions([...posPlayer, ...posMobs]);
+    if (!mobs) {
+      const posPlayer = this.renderingTeam(positions, 'player');
+      arr = [...posPlayer, ...posMobs];
+    } else {
+      arr = [...posMobs];
+    }
+
+    this.gamePlay.redrawPositions(arr);
   }
 
   renderingTeam(positions, type) {
@@ -167,6 +175,13 @@ export default class GameController {
     const characters = type === 'mobs' ? this.mobsTeam.characters : this.playerTeam.characters;
     characters.forEach(character => {
       let position = getRandomInRange(0, positions[type].length - 1);
+
+      if (this.positions.includes(position)) {
+        do {
+          position = getRandomInRange(0, positions[type].length - 1);
+        } while (!this.positions.includes(position));
+      }
+
       character.position = positions[type][position];
       character.radiusAttack = getRadiusAttack(character.position, character.distanceAttack);
       this.positions.push(character.position);
@@ -213,13 +228,14 @@ export default class GameController {
 
   ai() {
     if (this.move !== 'mobs') return;
+    if (this.mobsTeam.characters.length < 1) return;
 
     //выбор моба и цели.
     const select = this.aiSelect();
 
     if (select.action === 'attack') {
       this.attackAi(select);
-    } else {
+    } else if (select.action === 'move') {
       this.movingAi(select);
     }
   }
@@ -272,9 +288,7 @@ export default class GameController {
 
     const showDamage = this.gamePlay.showDamage(player.position, damage);
     showDamage.then(() => {
-      const positionedCharacter = this.getNewPositions();
-
-      this.gamePlay.redrawPositions(positionedCharacter);
+      this.checkDeath(player, 'player');
 
       this.move = 'player';
     });
@@ -378,5 +392,60 @@ export default class GameController {
       min: Math.floor(index / this.gamePlay.boardSize) * this.gamePlay.boardSize,
       max: (Math.floor(index / this.gamePlay.boardSize) + 1) * this.gamePlay.boardSize - 1,
     }
+  }
+
+  checkDeath(char, type) {
+    if (char.health < 1) {
+      this.positions = this.positions.filter(item => item !== char.position);
+      this[type + 'Team'].characters = this[type + 'Team'].characters.filter(item => item !== char);
+
+      if (this.mobsTeam.characters.length === 0) {
+        this.roundComplete();
+      }
+    }
+
+    const positionedCharacter = this.getNewPositions();
+
+    this.gamePlay.redrawPositions(positionedCharacter);
+  }
+
+  roundComplete() {
+    this.move = 'player';
+    let maxLevel = 1;
+    this.playerTeam.characters.forEach(char => {
+      this.levelUp(char);
+
+      if (maxLevel < char.level) {
+        maxLevel = char.level;
+      }
+    });
+    this.gamePlay.drawUi(themes.next().value);
+    this.mobsTeam = generateTeam([Vampire, Undead, Daemon], maxLevel, 3);
+    this.mobsTeam.characters.forEach(char => {
+      for (let i = 1; i <= char.level; i += 1) {
+        this.levelUp(char, false);
+      }
+    });
+    this.renderingTeamInit(true);
+  }
+
+  levelUp(char, level = true) {
+    if (level) {
+      char.level += 1;
+    }
+
+    char.attack = this.upStat(char.health, char.attack);
+    char.defence = this.upStat(char.health, char.defence);
+    char.health = this.upHealth(char.health);
+  }
+
+  upHealth(health) {
+    health += 80;
+
+    return health > 100 ? 100 : health;
+  }
+
+  upStat(health, stat) {
+    return health > 1 ? Math.max(stat, stat * (80 + health) / 100) : stat;
   }
 }
