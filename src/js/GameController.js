@@ -10,6 +10,7 @@ import Daemon from "./characters/Daemon";
 import {getInfoCharacter, checkPositionMoving, getRadiusAttack} from "./utils";
 import GamePlay from "./GamePlay";
 import cursors from "./cursors";
+import GameState from "./GameState";
 
 export default class GameController {
   constructor(gamePlay, stateService) {
@@ -18,26 +19,44 @@ export default class GameController {
     this.positions = [];
     this.classesPlayer = [Bowman, Swordsman, Magician];
     this.selectChar = null;
-    this.move = 'player';
+    this.gameState = new GameState();
+    this.state = this.gameState.getState();
   }
 
-  init() {
+  init(theme = null) {
     // TODO: add event listeners to gamePlay events
     // TODO: load saved stated from stateService
 
-    this.gamePlay.drawUi(themes.next().value);
+    this.gamePlay.drawUi(themes.next(theme).value);
     this.playerTeam = generateTeam(this.classesPlayer, 2, 3);
     this.mobsTeam = generateTeam([Vampire, Undead, Daemon], 2, 3);
     this.renderingTeamInit();
     this.gamePlay.addCellEnterListener(this.onCellEnter.bind(this));
     this.gamePlay.addCellLeaveListener(this.onCellLeave.bind(this));
     this.gamePlay.addCellClickListener(this.onCellClick.bind(this));
+    this.gamePlay.addNewGameListener(this.onClickNewGame.bind(this));
+  }
+
+  onClickNewGame() {
+    this.state = {
+      step: 'player',
+      gameOver: false,
+      score: this.state.score,
+      round: 1,
+      mobsTeam: null,
+      playerTeam: null,
+    }
+    this.gameState.from(this.state);
+    this.positions = [];
+    this.init(this.state.round - 2);
   }
 
   onCellClick(index) {
     // TODO: react to click
 
-    if (this.move === 'mobs') {
+    if (this.state.gameOver) return;
+
+    if (this.state.step === 'mobs') {
       GamePlay.showError('Сейчас ход противника.');
       return;
     }
@@ -71,10 +90,14 @@ export default class GameController {
       this.checkDeath(target, 'mobs');
       this.gamePlay.deselectCell(this.selectChar.position);
       this.selectChar = null;
-
-      this.move = 'mobs';
+      this.saveStatus('step', 'mobs');
       this.ai();
     });
+  }
+
+  saveStatus(field, value) {
+    this.state[field] = value;
+    this.gameState.from(this.state);
   }
 
   getNewPositions() {
@@ -98,11 +121,13 @@ export default class GameController {
 
     this.gamePlay.redrawPositions(positionedCharacter);
     this.selectChar = null;
-    this.move = 'mobs';
+    this.saveStatus('step', 'mobs');
   }
 
   onCellEnter(index) {
     // TODO: react to mouse enter
+    if (this.state.gameOver) return;
+
     let cursor = 'auto';
     if (this.positions.includes(index)) {
       const character = this.getCharacterByPosition(index);
@@ -142,6 +167,8 @@ export default class GameController {
 
   onCellLeave(index) {
     // TODO: react to mouse leave
+    if (this.state.gameOver) return;
+
     if (this.positions.includes(index)) {
       this.gamePlay.hideCellTooltip(index);
       this.gamePlay.setCursor(cursors.auto);
@@ -227,7 +254,7 @@ export default class GameController {
   }
 
   ai() {
-    if (this.move !== 'mobs') return;
+    if (this.state.step !== 'mobs') return;
     if (this.mobsTeam.characters.length < 1) return;
 
     //выбор моба и цели.
@@ -289,8 +316,7 @@ export default class GameController {
     const showDamage = this.gamePlay.showDamage(player.position, damage);
     showDamage.then(() => {
       this.checkDeath(player, 'player');
-
-      this.move = 'player';
+      this.saveStatus('step', 'player');
     });
   }
 
@@ -312,7 +338,7 @@ export default class GameController {
     const positionedCharacter = this.getNewPositions();
 
     this.gamePlay.redrawPositions(positionedCharacter);
-    this.move = 'player';
+    this.saveStatus('step', 'player');
   }
 
   setAiPositionsMoving(charecter) {
@@ -402,6 +428,11 @@ export default class GameController {
       if (this.mobsTeam.characters.length === 0) {
         this.roundComplete();
       }
+
+      if (this.playerTeam.characters.length === 0) {
+        this.saveStatus('gameOver', true);
+        GamePlay.showError('Игра окончена. Вы проиграли. Выш счет: ' + this.state.score);
+      }
     }
 
     const positionedCharacter = this.getNewPositions();
@@ -410,23 +441,32 @@ export default class GameController {
   }
 
   roundComplete() {
-    this.move = 'player';
-    let maxLevel = 1;
-    this.playerTeam.characters.forEach(char => {
-      this.levelUp(char);
+    const round = this.state.round + 1;
 
-      if (maxLevel < char.level) {
-        maxLevel = char.level;
-      }
-    });
-    this.gamePlay.drawUi(themes.next().value);
-    this.mobsTeam = generateTeam([Vampire, Undead, Daemon], maxLevel, 3);
-    this.mobsTeam.characters.forEach(char => {
-      for (let i = 1; i <= char.level; i += 1) {
-        this.levelUp(char, false);
-      }
-    });
-    this.renderingTeamInit(true);
+    if (round > 4) {
+      this.saveStatus('gameOver', true);
+      GamePlay.showError('Поздравляем, Вы победили! Выш счет: ' + this.state.score);
+    } else {
+      this.saveStatus('step', 'player');
+      this.saveStatus('score', this.state.score + 1);
+      this.saveStatus('round', round);
+      let maxLevel = 1;
+      this.playerTeam.characters.forEach(char => {
+        this.levelUp(char);
+
+        if (maxLevel < char.level) {
+          maxLevel = char.level;
+        }
+      });
+      this.gamePlay.drawUi(themes.next().value);
+      this.mobsTeam = generateTeam([Vampire, Undead, Daemon], maxLevel, 3);
+      this.mobsTeam.characters.forEach(char => {
+        for (let i = 1; i <= char.level; i += 1) {
+          this.levelUp(char, false);
+        }
+      });
+      this.renderingTeamInit(true);
+    }
   }
 
   levelUp(char, level = true) {

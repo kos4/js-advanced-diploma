@@ -1,14 +1,19 @@
 export default class GameState {
   #state = {
     step: 'player',
+    gameOver: false,
+    score: 0,
+    round: 1,
+    mobsTeam: null,
+    playerTeam: null,
   };
-  static from(object) {
+  from(object) {
     // TODO: create object
     this.#state = object;
     return null;
   }
 
-  static getState () {
+  getState () {
     return this.#state;
   }
 }

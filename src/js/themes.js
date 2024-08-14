@@ -6,7 +6,11 @@ const themes = {
   [Symbol.iterator]() {
     return this;
   },
-  next() {
+  next(key = null) {
+    if (key !== null) {
+      this.current = key;
+    }
+
     if (this.current === undefined) {
       this.current = -1;
     }
