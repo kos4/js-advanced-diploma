@@ -2,22 +2,23 @@ import themes from "./themes";
 import Bowman from "./characters/Bowman";
 import Swordsman from "./characters/Swordsman";
 import Magician from "./characters/Magician";
-import {generateTeam, getPositions, getPositionsChar, getRandomInRange} from "./generators";
+import {generateTeam, getPositions, getRandomInRange} from "./generators";
 import PositionedCharacter from "./PositionedCharacter";
 import Vampire from "./characters/Vampire";
 import Undead from "./characters/Undead";
 import Daemon from "./characters/Daemon";
-import {getInfoCharacter, checkPositionMoving, getRadiusAttack} from "./utils";
+import {checkPositionMoving, getInfoCharacter, getRadiusAttack} from "./utils";
 import GamePlay from "./GamePlay";
 import cursors from "./cursors";
 import GameState from "./GameState";
+import Team from "./Team";
 
 export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
     this.stateService = stateService;
     this.positions = [];
-    this.classesPlayer = [Bowman, Swordsman, Magician];
+    this.classesPlayer = ['bowman', 'swordsman', 'magician'];
     this.selectChar = null;
     this.gameState = new GameState();
     this.state = this.gameState.getState();
@@ -28,13 +29,54 @@ export default class GameController {
     // TODO: load saved stated from stateService
 
     this.gamePlay.drawUi(themes.next(theme).value);
-    this.playerTeam = generateTeam(this.classesPlayer, 2, 3);
+    this.playerTeam = generateTeam([Bowman, Swordsman, Magician], 2, 3);
     this.mobsTeam = generateTeam([Vampire, Undead, Daemon], 2, 3);
     this.renderingTeamInit();
     this.gamePlay.addCellEnterListener(this.onCellEnter.bind(this));
     this.gamePlay.addCellLeaveListener(this.onCellLeave.bind(this));
     this.gamePlay.addCellClickListener(this.onCellClick.bind(this));
     this.gamePlay.addNewGameListener(this.onClickNewGame.bind(this));
+    this.gamePlay.addSaveGameListener(this.onClickSaveGame.bind(this));
+    this.gamePlay.addLoadGameListener(this.onClickLoadGame.bind(this));
+  }
+
+  onClickLoadGame() {
+    try {
+      const classes = {
+        swordsman: Swordsman,
+        magician: Magician,
+        bowman: Bowman,
+        daemon: Daemon,
+        undead: Undead,
+        vampire: Vampire,
+      };
+      const data = this.stateService.load();
+      this.state = {
+        step: data.step,
+        gameOver: data.gameOver,
+        score: data.score,
+        round: data.round,
+      }
+      this.playerTeam = new Team(data.playerTeam.map(item => Object.assign(new classes[item.type](item.level), item)));
+      this.mobsTeam = new Team(data.mobsTeam.map(item => Object.assign(new classes[item.type](item.level), item)));
+      this.positions = [];
+      this.gamePlay.drawUi(themes.next(data.round - 2).value);
+      const characters = [];
+      this.playerTeam.characters.concat(this.mobsTeam.characters).forEach(item => {
+        characters.push({character: item, position: item.position});
+        this.positions.push(item.position);
+      });
+      this.gamePlay.redrawPositions(characters);
+    } catch (error) {
+      GamePlay.showError(error.message);
+    }
+  }
+
+  onClickSaveGame() {
+    const data = this.gameState.getState();
+    data.mobsTeam = this.mobsTeam.characters;
+    data.playerTeam = this.playerTeam.characters;
+    this.stateService.save(data);
   }
 
   onClickNewGame() {
@@ -43,9 +85,7 @@ export default class GameController {
       gameOver: false,
       score: this.state.score,
       round: 1,
-      mobsTeam: null,
-      playerTeam: null,
-    }
+    };
     this.gameState.from(this.state);
     this.positions = [];
     this.init(this.state.round - 2);
@@ -244,13 +284,7 @@ export default class GameController {
   }
 
   isCharacterPlayer(character) {
-    for (let i = 0; i < this.classesPlayer.length; i += 1) {
-      if (character instanceof this.classesPlayer[i]) {
-        return true;
-      }
-    }
-
-    return false;
+    return this.classesPlayer.includes(character.type);
   }
 
   ai() {
