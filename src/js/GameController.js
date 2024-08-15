@@ -130,8 +130,13 @@ export default class GameController {
       this.checkDeath(target, 'mobs');
       this.gamePlay.deselectCell(this.selectChar.position);
       this.selectChar = null;
-      this.saveStatus('step', 'mobs');
-      this.ai();
+
+      if (this.state.gameOver) {
+        GamePlay.showError('Поздравляем, Вы победили! Выш счет: ' + this.state.score);
+      } else {
+        this.saveStatus('step', 'mobs');
+        this.ai();
+      }
     });
   }
 
@@ -240,14 +245,12 @@ export default class GameController {
   renderingTeam(positions, type) {
     const positionedCharacter = [];
     const characters = type === 'mobs' ? this.mobsTeam.characters : this.playerTeam.characters;
-    characters.forEach(character => {
-      let position = getRandomInRange(0, positions[type].length - 1);
 
-      if (this.positions.includes(position)) {
-        do {
-          position = getRandomInRange(0, positions[type].length - 1);
-        } while (!this.positions.includes(position));
-      }
+    characters.forEach(character => {
+      let position;
+      do {
+        position = getRandomInRange(0, positions[type].length - 1);
+      } while (this.positions.includes(positions[type][position]));
 
       character.position = positions[type][position];
       character.radiusAttack = getRadiusAttack(character.position, character.distanceAttack);
@@ -351,6 +354,10 @@ export default class GameController {
     showDamage.then(() => {
       this.checkDeath(player, 'player');
       this.saveStatus('step', 'player');
+
+      if (this.state.gameOver) {
+        GamePlay.showError('Игра окончена. Вы проиграли. Выш счет: ' + this.state.score);
+      }
     });
   }
 
@@ -465,7 +472,6 @@ export default class GameController {
 
       if (this.playerTeam.characters.length === 0) {
         this.saveStatus('gameOver', true);
-        GamePlay.showError('Игра окончена. Вы проиграли. Выш счет: ' + this.state.score);
       }
     }
 
@@ -479,7 +485,6 @@ export default class GameController {
 
     if (round > 4) {
       this.saveStatus('gameOver', true);
-      GamePlay.showError('Поздравляем, Вы победили! Выш счет: ' + this.state.score);
     } else {
       this.saveStatus('step', 'player');
       this.saveStatus('score', this.state.score + 1);

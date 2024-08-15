@@ -101,8 +101,8 @@ export function getRadiusAttack(cur_pos, dist) {
   const size = 8;
   const list = [];
 
-  const pos_x = (cur_pos - 1) % size + 1 >= size ? 0 : (cur_pos - 1) % size + 1;
-  const pos_y = Math.floor((cur_pos - 1)/size) + 1;
+  const pos_x = (cur_pos - 1) % size + 1;
+  const pos_y = Math.floor((cur_pos - 1)/size);
 
   const start_x = (pos_x - dist >= 0) ? pos_x - dist : 0;
   const start_y = (pos_y - dist >= 0) ? pos_y - dist : 0;
@@ -112,7 +112,6 @@ export function getRadiusAttack(cur_pos, dist) {
   for (let y = start_y; y <= end_y; y++) {
     for (let x = start_x; x <= end_x; x++) {
       let res = y * size + x;
-
       if (res !== cur_pos) {
         list.push(res);
       }
