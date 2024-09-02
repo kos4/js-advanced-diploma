@@ -24,7 +24,7 @@ export default class GameController {
     this.state = this.gameState.getState();
   }
 
-  init(theme = null) {
+  init(theme = null, newGame = false) {
     // TODO: add event listeners to gamePlay events
     // TODO: load saved stated from stateService
 
@@ -32,12 +32,14 @@ export default class GameController {
     this.playerTeam = generateTeam([Bowman, Swordsman, Magician], 2, 3);
     this.mobsTeam = generateTeam([Vampire, Undead, Daemon], 2, 3);
     this.renderingTeamInit();
-    this.gamePlay.addCellEnterListener(this.onCellEnter.bind(this));
-    this.gamePlay.addCellLeaveListener(this.onCellLeave.bind(this));
-    this.gamePlay.addCellClickListener(this.onCellClick.bind(this));
-    this.gamePlay.addNewGameListener(this.onClickNewGame.bind(this));
-    this.gamePlay.addSaveGameListener(this.onClickSaveGame.bind(this));
-    this.gamePlay.addLoadGameListener(this.onClickLoadGame.bind(this));
+    if (!newGame) {
+      this.gamePlay.addCellEnterListener(this.onCellEnter.bind(this));
+      this.gamePlay.addCellLeaveListener(this.onCellLeave.bind(this));
+      this.gamePlay.addCellClickListener(this.onCellClick.bind(this));
+      this.gamePlay.addNewGameListener(this.onClickNewGame.bind(this));
+      this.gamePlay.addSaveGameListener(this.onClickSaveGame.bind(this));
+      this.gamePlay.addLoadGameListener(this.onClickLoadGame.bind(this));
+    }
   }
 
   onClickLoadGame() {
@@ -88,7 +90,7 @@ export default class GameController {
     };
     this.gameState.from(this.state);
     this.positions = [];
-    this.init(this.state.round - 2);
+    this.init(this.state.round - 2, true);
   }
 
   onCellClick(index) {
@@ -113,7 +115,6 @@ export default class GameController {
           this.ai();
         } else if (this.positions.includes(index)) {
           this.attackCharacter(index);
-
         }
       } else {
         GamePlay.showError('Вы выбираете не своего персонажа.');
@@ -123,7 +124,7 @@ export default class GameController {
 
   attackCharacter(index) {
     const target = this.getCharacterByPosition(index)
-    const damage = Math.max(this.selectChar.attack - target.defence, this.selectChar.attack * 0.1);
+    const damage = Math.round(Math.max(this.selectChar.attack - target.defence, this.selectChar.attack * 0.1));
     target.health -= damage;
     const showDamage = this.gamePlay.showDamage(index, damage);
     showDamage.then(() => {
@@ -347,7 +348,7 @@ export default class GameController {
 
   attackAi(selectChar) {
     const {mob, player} = selectChar;
-    const damage = Math.max(mob.attack - player.defence, mob.attack * 0.1);
+    const damage = Math.round(Math.max(mob.attack - player.defence, mob.attack * 0.1));
     player.health -= damage;
 
     const showDamage = this.gamePlay.showDamage(player.position, damage);
@@ -367,8 +368,9 @@ export default class GameController {
     mob.movingPositions = this.setAiPositionsMoving(mob);
 
     mob.movingPositions.forEach(pos => {
-      if (newPosition === null || (Math.abs(pos - player.position) < Math.abs(newPosition - player.position) && !this.positions.includes(pos))) {
+      if ((newPosition === null || Math.abs(pos - player.position) < Math.abs(newPosition - player.position)) && !this.positions.includes(pos)) {
         newPosition = pos;
+        return false;
       }
     });
 
@@ -504,7 +506,8 @@ export default class GameController {
           this.levelUp(char, false);
         }
       });
-      this.renderingTeamInit(true);
+      this.positions = [];
+      this.renderingTeamInit();
     }
   }
 
