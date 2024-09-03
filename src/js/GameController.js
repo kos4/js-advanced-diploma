@@ -506,6 +506,17 @@ export default class GameController {
           this.levelUp(char, false);
         }
       });
+
+      if (this.playerTeam.characters.length < 3) {
+        const addChar = generateTeam([Bowman, Swordsman, Magician], maxLevel, 3 - this.playerTeam.characters.length);
+        addChar.characters.forEach(char => {
+          for (let i = 1; i <= char.level; i += 1) {
+            this.levelUp(char, false);
+          }
+          this.playerTeam.characters.push(char);
+        });
+      }
+
       this.positions = [];
       this.renderingTeamInit();
     }
